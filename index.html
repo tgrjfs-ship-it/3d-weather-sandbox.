@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>2D Atmospheric Fluid Simulation</title>
+<title>Navier-Stokes Fluid Simulation</title>
 <style>
   body {
     margin: 0;
@@ -36,8 +36,9 @@
     align-items: flex-start;
     margin-bottom: 1rem;
     gap: 0.5rem;
+    width: 100%;
   }
-  .controls .row { display:flex; gap:0.5rem; align-items:center; }
+  .controls .row { display:flex; gap:0.5rem; align-items:center; flex-wrap: wrap; }
   .toggle-btn {
     background: linear-gradient(180deg,#2b2b2b,#1a1a1a);
     color:#ffdfff; border:1px solid #5a3b7a; padding:6px 10px; border-radius:10px;
@@ -52,6 +53,8 @@
   input[type="range"], .control-slider {
     accent-color: #7a4bd6;
     height: 28px;
+    width: 100%;
+    max-width: 320px;
   }
   #loadingOverlay { font-size: 18px; }
   #glOverlay { position:absolute; left:0; top:0; pointer-events:none; border-radius:12px; }
@@ -59,72 +62,109 @@
     position:fixed; inset:0; display:none; align-items:center; justify-content:center;
     background:rgba(10,10,10,0.7); color:#fff; font-family:monospace; z-index:40;
   }
+
+  /* Panel for merged UI */
+  .panel {
+    width: 100%;
+    max-width: 680px;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    margin: 10px;
+    border-radius: 12px;
+    background: #0b0b0b;
+    border: 1px solid #222;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+  }
+  .panel h1 {
+    margin: 0 0 6px 0;
+    font-size: 18px;
+    color: #ddd;
+  }
+  .panel .buttons { display:flex; gap:8px; flex-wrap: wrap; }
+
+  /* Mobile-friendly adjustments */
+  @media (max-width: 768px) {
+    .panel { margin: 8px; padding: 10px; }
+    .controls label { font-size: 13px; }
+    .controls .row label { font-size: 13px; }
+    .panel .buttons button, .panel .buttons .toggle-btn { flex: 1 1 auto; }
+  }
 </style>
 </head>
 <body>
 
-<div class="status" id="status">Starting...</div>
-<h1>Navier-Stokes Fluid</h1>
+<div class="panel">
+  <h1>Navier-Stokes Fluid</h1>
+  <div class="status" id="status">Starting...</div>
 
-<div class="controls">
-  <label>Brush Intensity: <span id="intensityVal">100</span></label>
-  <input type="range" id="brushIntensity" min="20" max="500" value="100">
+  <div class="controls" id="uiPanel">
+    <label>Brush Intensity: <span id="intensityVal">100</span></label>
+    <input type="range" id="brushIntensity" min="20" max="500" value="100">
+    
+    <label>Brush Size: <span id="sizeVal">1</span></label>
+    <input type="range" id="brushSize" min="1" max="50" value="1">
   
-  <label>Brush Size: <span id="sizeVal">1</span></label>
-  <input type="range" id="brushSize" min="1" max="50" value="1">
- 
-  <button id="pauseBtn">Pause</button>
-  <button id="curlToggle" class="toggle-btn">Curl: Off</button>
+    <div class="buttons">
+      <button id="pauseBtn">Pause</button>
+      <button id="curlToggle" class="toggle-btn">Curl: Off</button>
+    </div>
 
-  <label>Resolution:
-    <select id="resolutionSelect">
-      <option value="low">Low</option>
-      <option value="med" selected>Medium</option>
-      <option value="high">High</option>
-    </select>
-  </label>
+    <label>Resolution:
+      <select id="resolutionSelect">
+        <option value="low">Low</option>
+        <option value="med" selected>Medium</option>
+        <option value="high">High</option>
+      </select>
+    </label>
 
-  <div class="row">
-    <button id="resetBtn">Reset Simulation</button>
-    <button id="shaderToggle" class="toggle-btn">Shader: Off</button>
+    <div class="row">
+      <button id="resetBtn">Reset Simulation</button>
+      <button id="shaderToggle" class="toggle-btn">Shader: Off</button>
+      <button id="fullscreenBtn" class="toggle-btn">Fullscreen Canvas</button>
+      <button id="fullscreenLandscapeBtn" class="toggle-btn">Fullscreen Landscape</button>
+    </div>
+
+    <div class="row" style="align-items:center; gap:0.6rem;">
+      <label style="font-size:13px;">Zoom</label>
+      <input id="zoomSlider" type="range" min="0.7" max="2" step="0.01" value="1">
+      <label style="font-size:13px;">Camera X</label>
+      <input id="camXSlider" type="range" min="0" max="100" step="1" value="0">
+    </div>
+    <div class="row" style="align-items:center; gap:0.6rem;">
+      <label style="font-size:13px;">View Width</label>
+      <input id="viewW" type="range" min="240" max="768" step="8" value="512">
+      <label style="font-size:13px;">View Height</label>
+      <input id="viewH" type="range" min="240" max="768" step="8" value="512">
+    </div>
+
+    <div id="shaderControls" style="display:none; flex-direction:column; gap:6px;">
+      <label>Shader Intensity: <span id="shaderIntVal">0.6</span></label>
+      <input class="control-slider" id="shaderIntensity" type="range" min="0" max="1" step="0.01" value="0.6">
+      <label>Noise Scale: <span id="noiseVal">3.0</span></label>
+      <input class="control-slider" id="noiseScale" type="range" min="0.5" max="8" step="0.1" value="3">
+    </div>
+
+    <label>Max Droplets: <span id="maxDropletsVal">400</span></label>
+    <input id="maxDroplets" type="range" min="100" max="1200" step="10" value="400">
+
+    <label>Base Temp (°C): <span id="baseTempVal">15</span></label>
+    <input id="baseTemp" type="range" min="-20" max="40" step="1" value="15">
+
+    <div class="row" style="align-items:center; gap:0.6rem;">
+      <label style="font-size:13px;">Disable Max Droplet Cap</label>
+      <input type="checkbox" id="disableMaxToggle" />
+      <span id="disableWarning" style="display:none; color:#ffcc66; font-size:13px; margin-left:0.5rem;">
+        Warning: Are you sure you want to turning the maximum droplets off? turning this off can causes performance drops
+      </span>
+    </div>
   </div>
-  <div class="row" style="align-items:center; gap:0.6rem;">
-    <label style="font-size:13px;">FPS: <span id="fpsVal">0</span></label>
-    <label style="font-size:13px;">Max FPS:</label>
-    <input id="maxFps" type="range" min="10" max="120" step="1" value="60" style="width:160px;">
-    <span id="maxFpsVal" style="font-size:13px; width:38px; display:inline-block; text-align:right;">60</span>
-  </div>
-
-  <div id="shaderControls" style="display:none;">
-    <label>Shader Intensity: <span id="shaderIntVal">0.6</span></label>
-    <input class="control-slider" id="shaderIntensity" type="range" min="0" max="1" step="0.01" value="0.6">
-    <label>Noise Scale: <span id="noiseVal">3.0</span></label>
-    <input class="control-slider" id="noiseScale" type="range" min="0.5" max="8" step="0.1" value="3">
-  </div>
-
-  <!-- New precipitation controls -->
-  <label>Max Droplets: <span id="maxDropletsVal">400</span></label>
-  <input id="maxDroplets" type="range" min="100" max="1200" step="10" value="400">
-
-  <label>Base Temp (°C): <span id="baseTempVal">15</span></label>
-  <input id="baseTemp" type="range" min="-20" max="40" step="1" value="15">
-
-  <!-- Disable max droplets toggle + warning -->
-  <div class="row" style="align-items:center; gap:0.6rem;">
-    <label style="font-size:13px;">Disable Max Droplet Cap</label>
-    <input type="checkbox" id="disableMaxToggle" />
-    <span id="disableWarning" style="display:none; color:#ffcc66; font-size:13px; margin-left:0.5rem;">
-      Warning: Are you sure you want to turning the maximum droplets off? turning this off can causes performance drops
-    </span>
-  </div>
-
 </div>
 
 <canvas id="fluidCanvas"></canvas>
 <canvas id="glOverlay" width="0" height="0" style="z-index:20;"></canvas>
 <div id="loadingOverlay"><div id="loadingText">Loading shader...</div></div>
 
-<p>Jos Stam's Stable Fluids Algorithm</p>
+<p style="margin:8px 0;">Jos Stam's Stable Fluids Algorithm</p>
 
 <script>
 const canvas = document.getElementById('fluidCanvas');
@@ -157,12 +197,8 @@ const lightningSounds = [];
 let lightningSoundBuffersLoaded = false;
 // list of audio files to load (these assets are added separately)
 const lightningFiles = [
-  'lightning1.mp3',
-  'lightning2.mp3',
-  'lightning3.mp3',
-  'lightning4.mp3',
-  'lightning5.mp3',
-  'lightning6.mp3'
+  'lightning1.mp3', 'lightning2.mp3', 'lightning3.mp3',
+  'lightning4.mp3', 'lightning5.mp3', 'lightning6.mp3'
 ];
 function preloadLightningSounds(){
   return new Promise((resolve) => {
@@ -189,6 +225,7 @@ preloadLightningSounds();
 // Temperature and precipitation controls (declare before initGrid so initGrid can use baseTemperature)
 let maxDroplets = 400;
 let baseTemperature = 15; // degrees Celsius
+let terrain = []; let water = []; // 1D terrain & water
 // FPS / framerate cap
 let fps = 0;
 let fpsSmoothed = 0;
@@ -207,6 +244,7 @@ let brushIntensity = 100;
 let brushSize = 1;
 let running = true;
 let curlEnabled = false; // toggle for curl force
+let cameraX = 0, cameraY = 0, zoom = 1;
 
 // Initialize grid based on selected resolution
 function initGrid(res='med') {
@@ -231,6 +269,15 @@ function initGrid(res='med') {
       const grad = (j / N) * 4.0; // up to ~4°C variation
       temperature[idx] = baseTemperature + grad + (Math.random() - 0.5) * 2.2;
     }
+  }
+  // generate 1D terrain (length N) and water levels
+  terrain = new Array(N);
+  water = new Array(N).fill(0);
+  for (let i = 0; i < N; i++) {
+    const t = i / N;
+    const base = 24 + 12*Math.sin(t*Math.PI*2.0);
+    const bumps = 10*Math.sin(t*8.0) + 6*Math.sin(t*3.3);
+    terrain[i] = Math.max(12, base + bumps + (Math.random()-0.5)*6);
   }
 }
 
@@ -314,29 +361,21 @@ function step() {
   diffuse(0, density0, density, 0.00001, 0.1);
   advect(0, density, density0, vx, vy, 0.1);
 
-  // small temperature advection: advect the temperature with the flow (keeps it more organic)
   const temp0 = new Array(N * N);
   for (let i=0;i<N*N;i++) temp0[i] = temperature[i];
   advect(0, temperature, temp0, vx, vy, 0.05);
 
-  // Spawn precipitation and lightning from dense cores
   for (let i = 2; i < N-2; i++) {
     for (let j = 2; j < N-2; j++) {
       const idx = IX(i,j);
       const d = density[idx];
-      // precipitation probabilities scale with local cloud density (0..500)
       const dNorm = Math.max(0, Math.min(1, d / 500));
-      // temperature at this cell
       const localTemp = temperature[idx];
 
-      // rain probability reduced by warm temperatures and increased by cold
-      const rainBias = Math.max(0.08, 0.18 - (localTemp - 5) * 0.006); // warmer reduces
-      // mist probability increases with warm and high humidity
+      const rainBias = Math.max(0.08, 0.18 - (localTemp - 5) * 0.006);
       const mistBias = Math.max(0.02, 0.03 + (localTemp - 10) * 0.006);
 
-      // rain: moderate threshold, probability scales with density and temp bias
       if (d > 12 && Math.random() < rainBias * dNorm) {
-        // make precipitation inherit more of the local fluid velocity initially
         particles.push({
           x: i * CELL + Math.random() * CELL,
           y: j * CELL + Math.random() * CELL,
@@ -346,10 +385,8 @@ function step() {
           size: 1.2 + Math.random()*1.8,
           type: 'rain'
         });
-        // local dissipation: precip reduces local density that spawned it
         density[idx] = Math.max(0, density[idx] - 18 * dNorm);
       }
-      // mist/fog: higher density but lower downward speed, scales with density and mistBias
       if (d > 80 && Math.random() < mistBias * dNorm) {
         particles.push({
           x: i * CELL + Math.random() * CELL,
@@ -360,22 +397,25 @@ function step() {
           size: 4 + Math.random()*6,
           type: 'mist'
         });
-        // mist consumes some cloud mass more gently
         density[idx] = Math.max(0, density[idx] - 8 * dNorm);
       }
-      // Lightning: reduced threshold and higher chance, still obey global cooldown
-      if (d > 220) { // lowered from 380 -> more frequent strikes
+
+      // CG Lightning
+      if (d > 220) {
         const now = performance.now();
-        // increased base chance to make strikes more common (scaled by density)
         if (now - lastLightningTime > lightningCooldown && Math.random() < 0.02 * dNorm) {
           createLightning(i*CELL, j*CELL);
           lastLightningTime = now;
         }
       }
+
+      // IC Lightning: denser clouds, higher chance but smaller flash; independent cooldown
+      if (d > 160 && Math.random() < 0.015 * dNorm) {
+        createICLightning(i*CELL, j*CELL);
+      }
     }
   }
 
-  // Precipitation growth: convert mist -> rain in cold/high-density regions
   for (let p of particles) {
     if (p.type === 'mist') {
       const gi = Math.max(0, Math.min(N-1, Math.floor(p.x / CELL)));
@@ -383,13 +423,10 @@ function step() {
       const gidx = IX(gi, gj);
       const localTemp = temperature[gidx];
       const localD = density[gidx];
-      // If it's cold enough and there's a lot of cloud mass, mist can condense into rain
       if (localTemp < 5 && localD > 180) {
-        // probability scales with how cold and how dense
         const coldFactor = Math.min(1, (5 - localTemp) / 10);
         const densFactor = Math.min(1, (localD - 180) / 320);
         if (Math.random() < 0.06 * coldFactor * densFactor) {
-          // convert to rain: reduce size, increase downward velocity
           p.type = 'rain';
           p.size = 1.6 + Math.random()*1.2;
           p.vy = 1.2 + Math.random()*0.8;
@@ -398,9 +435,8 @@ function step() {
     }
   }
 
-  // Update particles
+  // Update particles with boundary safety
   particles = particles.flatMap(p => {
-    // sample local fluid velocity at particle position to influence motion
     const gi = Math.max(0, Math.min(N-1, Math.floor(p.x / CELL)));
     const gj = Math.max(0, Math.min(N-1, Math.floor(p.y / CELL)));
     const gidx = IX(gi, gj);
@@ -408,19 +444,22 @@ function step() {
     const localVy = vy[gidx] || 0;
 
     if(p.type==='rain'){
-      // rain moves largely with fluid flow plus gravity
       p.x += p.vx*0.6 + localVx * 0.9;
       p.y += p.vy + localVy * 0.9;
-      p.vy += 0.45; // gravity
+      p.vy += 0.45;
       p.vx = (p.vx + localVx*0.2) * 0.995;
       p.life -= 0.01;
-      // impact -> small splash and short-lived ripple particle
+      // Boundary clamp; remove if outside
+      if (p.x < 0 || p.x > SIZE || p.y < 0) return null;
+
       if(p.y > SIZE - 6 || p.life <= 0){
+        const wi = Math.max(0, Math.min(N-1, Math.floor(p.x / CELL)));
+        water[wi] = (water[wi] || 0) + 0.6;
         const splashes = [];
         if (p.y > SIZE - 6) {
           const count = 2 + Math.floor(Math.random()*3);
           for(let s=0;s<count;s++){
-            splashes.push({ x: p.x + (Math.random()-0.5)*6, y: SIZE - 2, vx: (Math.random()-0.5)*2, vy: -1.2 - Math.random()*1.2, life: 0.25 + Math.random()*0.25, size: 0.8+Math.random()*1.2, type: 'splash' });
+            splashes.push({ x: Math.max(0, Math.min(SIZE, p.x + (Math.random()-0.5)*6)), y: SIZE - 2, vx: (Math.random()-0.5)*2, vy: -1.2 - Math.random()*1.2, life: 0.25 + Math.random()*0.25, size: 0.8+Math.random()*1.2, type: 'splash' });
           }
         }
         return splashes;
@@ -428,30 +467,35 @@ function step() {
       return p;
     }
     if(p.type==='mist'){
-      // mist drifts with the local fluid much more than its random initial velocity
       p.x += p.vx*0.15 + localVx * 0.8;
       p.y += p.vy*0.15 + localVy * 0.8;
       p.vy -= 0.01;
       p.vx = (p.vx + localVx*0.1) * 0.995;
       p.life -= 0.006;
       p.size *= 1.005;
+      if (p.x < 0 || p.x > SIZE || p.y < 0 || p.y > SIZE) return null;
       return p;
     }
     if(p.type==='splash'){
-      // splashes are short-lived and still feel the local flow a little
       p.x += p.vx + localVx * 0.25;
       p.y += p.vy + localVy * 0.25;
       p.vy += 0.25;
       p.vx *= 0.9;
       p.life -= 0.02;
+      if (p.x < 0 || p.x > SIZE || p.y < 0 || p.y > SIZE) return null;
       return p;
     }
     return null;
   }).filter(Boolean);
 
-  // Enforce a maximum particle/droplet count (trim oldest) unless disabled
   if (!disableMaxDropletCap && particles.length > maxDroplets) {
     particles.splice(0, particles.length - maxDroplets);
+  }
+
+  for(let i=1;i<N-1;i++){
+    const diffusion = 0.15*(water[i-1]+water[i+1]-2*water[i]);
+    water[i] += diffusion;
+    water[i] = Math.max(0, water[i] - 0.004 - Math.max(0, (terrain[i]-18))*0.0002);
   }
 
   lightnings = lightnings.filter(l=>{ l.life-=0.06; l.flicker=Math.random(); return l.life>0; });
@@ -494,30 +538,22 @@ function createLightning(x,y){
   const segments = [];
   let cx = x, cy = y;
   const targetY = SIZE;
-  // smaller main step to create a more jagged, vertical bolt with limited horizontal drift
   const baseStep = 8;
   while (cy < targetY) {
-    const nextY = cy + baseStep + Math.random() * 10; // modest vertical steps
-    // reduce horizontal spread so bolt falls mostly downward
+    const nextY = cy + baseStep + Math.random() * 10;
     const nextX = cx + (Math.random() - 0.5) * 18;
-    // thinner main trunk
     segments.push({ x1: cx, y1: cy, x2: nextX, y2: nextY, thickness: 1.6 + Math.random() * 0.8 });
 
-    // More restrained forks: lower chance and shorter, thinner branches
     if (Math.random() < 0.28 && nextY < targetY - 30) {
       const branchDir = Math.random() < 0.5 ? -1 : 1;
       let bx = nextX, by = nextY;
-      // short branch length (1-3 segments)
       const branchLength = 1 + Math.floor(Math.random() * 3);
       for (let b = 0; b < branchLength; b++) {
-        // much smaller horizontal offsets for branches for realism
         const nextBx = bx + branchDir * (6 + Math.random() * 10);
         const nextBy = by + 6 + Math.random() * 10;
-        // branch thickness decreases quickly
         const thickness = Math.max(0.6, 0.9 - b * 0.18);
         segments.push({ x1: bx, y1: by, x2: nextBx, y2: nextBy, thickness: thickness });
         bx = nextBx; by = nextBy;
-        // rare tiny sub-branchers
         if (Math.random() < 0.12 && by < targetY - 10) {
           const subDir = Math.random() < 0.5 ? -1 : 1;
           segments.push({
@@ -529,9 +565,7 @@ function createLightning(x,y){
         }
       }
     }
-
-    cx = nextX;
-    cy = nextY;
+    cx = nextX; cy = nextY;
   }
 
   // Add the bolt with slightly reduced flash to keep it from overpowering the scene
@@ -541,6 +575,27 @@ function createLightning(x,y){
   screenShake = Math.min(14, screenShake + 6);
 
   // Play random lightning sound if loaded
+  playLightningSound();
+}
+
+// IC lightning type creator (in-cloud lightning)
+function createICLightning(x, y){
+  const segments = [];
+  let cx = x, cy = y;
+  // IC lightning meanders within cloud: short, horizontal-biased segments
+  const maxLen = 120 + Math.random()*80;
+  let length = 0;
+  for(let s=0; s<60 && length < maxLen; s++){
+    const stepX = (Math.random()-0.5) * 28; // more horizontal drift
+    const stepY = (Math.random()-0.5) * 18; // limited vertical drift
+    const nx = Math.max(12, Math.min(SIZE-12, cx + stepX));
+    const ny = Math.max(12, Math.min(SIZE-120, cy + stepY));
+    const thick = 1.0 + Math.random()*0.6;
+    segments.push({ x1: cx, y1: cy, x2: nx, y2: ny, thickness: thick });
+    length += Math.hypot(nx-cx, ny-cy);
+    cx = nx; cy = ny;
+  }
+  lightnings.push({ segments, life: 0.9, flicker: Math.random(), flash: 0.4, type: 'ic' });
   playLightningSound();
 }
 
@@ -566,12 +621,8 @@ function playLightningSound(){
 // Render
 function render(){
   ctx.save();
-  if(screenShake>0){
-    const shakeX=(Math.random()-0.5)*screenShake;
-    const shakeY=(Math.random()-0.5)*screenShake;
-    ctx.translate(shakeX,shakeY);
-  }
-  // Light blue background for canvas (soft)
+  ctx.scale(zoom, zoom);
+  ctx.translate(-cameraX, -cameraY);
   ctx.fillStyle='rgba(170,210,240,0.95)';
   ctx.fillRect(0,0,SIZE,SIZE);
 
@@ -580,7 +631,6 @@ function render(){
       const d=density[IX(i,j)];
       if(d>0.5){
         const alpha=Math.min(d/200,0.9);
-        // densest areas appear as darker clouds
         ctx.fillStyle=`rgba(80,90,100,${alpha})`;
         ctx.fillRect(i*CELL,j*CELL,CELL+1,CELL+1);
       }
@@ -620,8 +670,9 @@ function render(){
     const lifeAlpha = Math.max(0, l.life);
     const pulse = 0.6 + l.flicker*0.6;
     const alpha = Math.min(1, lifeAlpha * pulse);
-    // subtle screen flash for very fresh strikes
-    if(l.life > 0.85){
+
+    // Subtle flash only for CG
+    if(l.type==='cg' && l.life > 0.85){
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
       ctx.fillStyle = `rgba(200,160,255,${0.18 * (l.flash||1)})`;
@@ -629,14 +680,19 @@ function render(){
       ctx.restore();
     }
 
-    // Outer glow (blurred)
+    // Color scheme selection
+    const outerColor = (l.type==='ic') ? `rgba(150,190,255,${0.16*alpha})` : `rgba(160,90,255,${0.18*alpha})`;
+    const midShadow = (l.type==='ic') ? `rgba(180,210,255,${0.5*alpha})` : `rgba(200,140,255,${0.6*alpha})`;
+    const coreColor = (l.type==='ic') ? `rgba(220,240,255,${0.9*alpha})` : `rgba(240,220,255,${0.95*alpha})`;
+
+    // Outer glow
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.shadowBlur = 40 * (0.6 + lifeAlpha*0.6);
-    ctx.shadowColor = `rgba(160,100,255,${0.55*alpha})`;
+    ctx.shadowBlur = 30 * (0.6 + lifeAlpha*0.6);
+    ctx.shadowColor = midShadow;
     l.segments.forEach(seg=>{
-      ctx.strokeStyle = `rgba(160,90,255,${0.18*alpha})`;
-      ctx.lineWidth = seg.thickness*10;
+      ctx.strokeStyle = outerColor;
+      ctx.lineWidth = seg.thickness*8;
       ctx.beginPath(); ctx.moveTo(seg.x1,seg.y1); ctx.lineTo(seg.x2,seg.y2); ctx.stroke();
     });
     ctx.restore();
@@ -644,32 +700,44 @@ function render(){
     // Mid glow
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    ctx.shadowBlur = 18 * (0.8 + lifeAlpha*0.8);
-    ctx.shadowColor = `rgba(200,140,255,${0.6*alpha})`;
+    ctx.shadowBlur = 14 * (0.8 + lifeAlpha*0.8);
+    ctx.shadowColor = midShadow;
     l.segments.forEach(seg=>{
-      ctx.strokeStyle = `rgba(200,130,255,${0.36*alpha})`;
-      ctx.lineWidth = seg.thickness*5;
+      ctx.strokeStyle = (l.type==='ic') ? `rgba(190,220,255,${0.3*alpha})` : `rgba(200,130,255,${0.36*alpha})`;
+      ctx.lineWidth = seg.thickness*4;
       ctx.beginPath(); ctx.moveTo(seg.x1,seg.y1); ctx.lineTo(seg.x2,seg.y2); ctx.stroke();
     });
     ctx.restore();
 
-    // Core bright lines
+    // Core lines
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     l.segments.forEach(seg=>{
-      ctx.strokeStyle = `rgba(240,220,255,${0.95*alpha})`;
-      ctx.lineWidth = Math.max(1, seg.thickness*1.2);
-      ctx.shadowBlur = 6;
-      ctx.shadowColor = `rgba(240,220,255,${0.8*alpha})`;
+      ctx.strokeStyle = coreColor;
+      ctx.lineWidth = Math.max(1, seg.thickness*1.1);
+      ctx.shadowBlur = 5;
+      ctx.shadowColor = coreColor;
       ctx.beginPath(); ctx.moveTo(seg.x1,seg.y1); ctx.lineTo(seg.x2,seg.y2); ctx.stroke();
     });
     ctx.restore();
-
-    // shadow streak rendering removed
   });
 
-  // tiny post-lightning glow fade
   ctx.shadowBlur = 0;
+
+  ctx.save();
+  ctx.translate(0, SIZE);
+  ctx.scale(1, -1);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  for(let i=0;i<N;i++){ ctx.lineTo(i*CELL, terrain[i]); }
+  ctx.lineTo(SIZE, 0); ctx.closePath();
+  ctx.fillStyle = '#393e46';
+  ctx.fill();
+  ctx.beginPath();
+  for(let i=0;i<N;i++){ ctx.lineTo(i*CELL, terrain[i] + water[i]); }
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(80,140,220,0.9)';
+  ctx.stroke();
+  ctx.restore();
 
   ctx.restore();
 }
@@ -948,8 +1016,34 @@ function animate(timestamp){
   if(shaderActive && shaderReady){
     renderShader(dt);
   }
+  optimizationTick(now);
   requestAnimationFrame(animate);
 }
+
+// Optimization engine: adaptive performance tuning
+let optLastCheck = performance.now();
+function optimizationTick(now){
+  if (now - optLastCheck < 2000) return;
+  optLastCheck = now;
+  const target = maxFps;
+  if (fpsSmoothed && fpsSmoothed < target * 0.6) {
+    // reduce load: trim droplets, lower shader intensity, lower maxFps
+    if (!disableMaxDropletCap) {
+      const cap = Math.max(120, Math.floor(maxDroplets * 0.8));
+      if (particles.length > cap) particles.splice(0, particles.length - cap);
+      maxDroplets = cap; if (maxDropletsSlider) { maxDropletsSlider.value = cap; maxDropletsVal.textContent = cap; }
+    }
+    shaderUniforms.intensity = Math.max(0.3, shaderUniforms.intensity * 0.85);
+    if (shaderActive) { shaderIntensitySlider.value = shaderUniforms.intensity; shaderIntVal.textContent = shaderUniforms.intensity.toFixed(2); }
+    maxFps = Math.max(30, Math.floor(maxFps * 0.9)); if (maxFpsSliderEl) { maxFpsSliderEl.value = maxFps; maxFpsValEl.textContent = maxFps; }
+  } else if (fpsSmoothed && fpsSmoothed > target * 0.95) {
+    // cautiously increase visual quality
+    shaderUniforms.intensity = Math.min(1.0, shaderUniforms.intensity * 1.04);
+    if (shaderActive) { shaderIntensitySlider.value = shaderUniforms.intensity; shaderIntVal.textContent = shaderUniforms.intensity.toFixed(2); }
+    maxFps = Math.min(120, Math.floor(maxFps * 1.02)); if (maxFpsSliderEl) { maxFpsSliderEl.value = maxFps; maxFpsValEl.textContent = maxFps; }
+  }
+}
+
 // start loop via rAF for timestamped animation
 lastLightningTime = 0;
 requestAnimationFrame(animate);
@@ -990,6 +1084,54 @@ resolutionSelect.addEventListener('change', (e) => {
 });
 
 /* shadow rays slider removed */
+
+// New: fullscreen button handling
+const fullscreenBtn = document.getElementById('fullscreenBtn');
+const zoomSlider = document.getElementById('zoomSlider');
+const camXSlider = document.getElementById('camXSlider');
+const viewW = document.getElementById('viewW');
+const viewH = document.getElementById('viewH');
+const fullscreenLandscapeBtn = document.getElementById('fullscreenLandscapeBtn');
+
+fullscreenBtn.addEventListener('click', async ()=>{
+  try{
+    await canvas.requestFullscreen();
+    document.body.style.background = 'black';
+  }catch(e){ /* ignore */ }
+});
+
+// Landscape fullscreen with orientation lock where supported
+fullscreenLandscapeBtn.addEventListener('click', async ()=>{
+  try{
+    await canvas.requestFullscreen();
+    if (screen.orientation && screen.orientation.lock) {
+      try { await screen.orientation.lock('landscape'); } catch(e){}
+    }
+    document.body.style.background = 'black';
+  }catch(e){ /* ignore */ }
+});
+
+zoomSlider.addEventListener('input',(e)=>{ zoom = parseFloat(e.target.value); });
+camXSlider.addEventListener('input',(e)=>{ cameraX = parseFloat(e.target.value) * (SIZE*0.01); });
+
+function applyViewSize(w,h){
+  canvas.style.width = w+'px'; canvas.style.height = h+'px';
+  glCanvas.style.width = w+'px'; glCanvas.style.height = h+'px';
+}
+viewW.addEventListener('input',(e)=>{ applyViewSize(parseInt(e.target.value), parseInt(viewH.value)); });
+viewH.addEventListener('input',(e)=>{ applyViewSize(parseInt(viewW.value), parseInt(e.target.value)); });
+applyViewSize(512,512);
+
+// New: precipitation controls
+maxDropletsSlider.addEventListener('input',(e)=>{ maxDroplets=parseInt(e.target.value); maxDropletsVal.textContent=maxDroplets; });
+baseTempSlider.addEventListener('input',(e)=>{ 
+  const newBase = parseFloat(e.target.value);
+  const delta = newBase - baseTemperature;
+  baseTemperature = newBase; baseTempVal.textContent = baseTemperature;
+  // shift current temperatures by delta
+  for(let i=0;i<N*N;i++) temperature[i] += delta;
+});
+
 </script>
 
 </body>
