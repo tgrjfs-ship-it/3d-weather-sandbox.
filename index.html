@@ -529,14 +529,14 @@
         // low-altitude default for forming clouds
         let alt = Math.max(1, (10 + Math.random() * 8) - 5); // effectively ~5..13m
         if (type === 'cirrus') alt = 110 + Math.random() * 25;
-        else if (type === 'altostratus') alt = 40 + Math.random() * 12;
-        else if (type === 'cumulonimbus') alt = 35 + Math.random() * 18;
+        else if (type === 'altostratus') alt = 50 + Math.random() * 12;
+        else if (type === 'cumulonimbus') alt = 45 + Math.random() * 18;
         // bring clouds 25% closer to surface (reduce altitude) except very high cirrus
         if (type !== 'cirrus') {
           alt = Math.max(0.6, alt * 0.75);
         }
         // reduced spawn radius and biased towards current camera position so new clouds appear near viewer
-        const SPAWN_RADIUS = 240;
+        const SPAWN_RADIUS = 480;
         const cx = (typeof camera !== 'undefined') ? camera.position.x : 0;
         const cz = (typeof camera !== 'undefined') ? camera.position.z : 0;
         // bias spawn to be closer to camera (within ~SPAWN_RADIUS/3) to ensure forming clouds are visible nearby
@@ -692,7 +692,7 @@
           }
           // create anvil topping for deep convection
           if (!ud.anvil) {
-            const anvilRadius = 10 + (cloud.userData.baseScale || 1) * 6;
+            const anvilRadius = 15 + (cloud.userData.baseScale || 1) * 6;
             const anvilGeom = new THREE.CylinderGeometry(anvilRadius, anvilRadius * 1.1, 1.0, 32);
             const anvilMat = createCloudMaterial();
             anvilMat.uniforms.density.value = 0.72;
@@ -714,7 +714,7 @@
             ud.anvilPrecipIntensity = Math.min(1.0, ud.precipitationIntensity + 0.25);
           } else {
             ud.anvil.scale.set(1.25,1,1.25);
-            ud.anvilPrecipIntensity = Math.min(1.0, ud.precipitationIntensity + 0.25);
+            ud.anvilPrecipIntensity = Math.min(1.0, ud.precipitationIntensity + 0.5);
           }
         }
       }
